@@ -33,14 +33,26 @@ uint8_t length_mask(const uint8_t key[NL][8])
 
 }  // namespace
 
+KeyInput::~KeyInput()
+{
+  if (!phrase.empty()) wipe(&phrase[0], phrase.size());
+  wipe(key, sizeof key);
+}
+
+KeyMaterial::~KeyMaterial()
+{
+  wipe(key, sizeof key);
+  wipe(mackey, sizeof mackey);
+}
+
 void readkeyfile(const std::string &name, uint8_t key[NL][8])
 {
   errarg = name;
   FILE *fh = fopen(name.c_str(), "r");
   if (!fh) errorexit(1);
   char line[256];
+  std::string parse;
   for (int n = 0; n < NL; n++) {
-    std::string parse;
     bool got = false;
     while (fgets(line, sizeof line, fh)) {
       const char *p = line;
@@ -58,6 +70,8 @@ void readkeyfile(const std::string &name, uint8_t key[NL][8])
     }
   }
   fclose(fh);
+  wipe(line, sizeof line);
+  wipe(&parse[0], parse.size());
 }
 
 namespace {
@@ -101,7 +115,9 @@ std::string getphrase(bool confirm)
     }
     if (confirm && tty) {
       if (!read_hidden("Repeat key phrase: ", again, tty)) { errarg = "phrase"; errorexit(10); }
-      if (again != s) { fputs("Phrases differ.\n", stderr); continue; }
+      bool same = again == s;
+      wipe(&again[0], again.size());
+      if (!same) { fputs("Phrases differ.\n", stderr); continue; }
     }
     break;
   }
@@ -126,9 +142,10 @@ KeyMaterial derive_keys(const KeyInput &in, const uint8_t *salt, const KdfParams
     Buf dk = scrypt(in.phrase, salt, SALT_LEN, 1u << kdf.logn, kdf.r, kdf.p, NL * 8 + sizeof km.mackey);
     memcpy(km.key, dk.data(), NL * 8);
     memcpy(km.mackey, dk.data() + NL * 8, sizeof km.mackey);
+    wipe(dk.data(), dk.size());
   } else {
     memcpy(km.key, in.key, NL * 8);
-    static const char label[] = "Odette 5.01 mac";
+    static const char label[] = "Odette 5.02 mac";
     Hmac512(&km.key[0][0], NL * 8).mac((const uint8_t *)label, sizeof label - 1, km.mackey);
   }
   km.lenmask = length_mask(km.key);

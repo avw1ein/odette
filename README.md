@@ -1,4 +1,4 @@
-# Odette 5.01
+# Odette 5.02
 
 Copyright (C) by Andy van Wezel, 1993 - 1994, 2026.
 Released under the MIT License (see [LICENSE](LICENSE)).
@@ -87,7 +87,7 @@ To get help:
 ./odette
 ```
 
-Files made by Odette 5.01 cannot be read by older versions, and the other way around.
+Files made by Odette 5.02 cannot be read by older versions, and the other way around.
 
 ---
 
@@ -162,7 +162,9 @@ Step 16: Whitening 8, DES encryption with key8, then a final
 
 Each whitening is 2048 bits and is made from all eight keys and the salt with HMAC-SHA-512, so every bit of every key matters, including the bits that DES itself ignores, and two files made with the same key file share no whitening. The tweak of step 0 is made the same way from the keys, the salt and the block number.
 
-The output consists of: a 4-byte header (O, D, 5, 1), the phrase hashing parameters (4 bytes), the salt (16 bytes), the IV (256 bytes), the encrypted blocks, and a 64-byte HMAC-SHA-512 tag over all of it. The MAC key is 512 bits, taken from the same keys or phrase as the DES keys. Decryption checks the tag first and stops with error 13 if it does not match.
+The output consists of: a 4-byte header (O, D, 5, 2), the phrase hashing parameters (4 bytes), the salt (16 bytes), the IV (256 bytes), the encrypted blocks, and a 64-byte HMAC-SHA-512 tag over all of it. The MAC key is 512 bits, taken from the same keys or phrase as the DES keys. Decryption checks the tag first and stops with error 13 if it does not match.
+
+The salt and the IV come from the system random generator on every encryption; there is no option to choose or repeat them, and the program stops with error 14 if the generator fails. Encrypting the same file twice therefore gives two unrelated outputs. This is deliberate: it is what guarantees that no two blocks, in one file or across files, are ever encrypted by the same cipher instance.
 
 ---
 
@@ -202,7 +204,7 @@ At decryption, type the phrase exactly the way you did at encryption. You can us
 
 ## 8. Intramural security
 
-This kind of security is not trivial because, for example, original files won't be destroyed. If you work on a computer connected to a LAN or WAN, it's also possible for someone else to peek at your computer. Also read the remark in [ANALYSIS.md](ANALYSIS.md) about cache timing attacks during encryption.
+This kind of security is not trivial because, for example, original files won't be destroyed. If you work on a computer connected to a LAN or WAN, it's also possible for someone else to peek at your computer. Odette disables core dumps, blocks debugger attachment by other processes of your user, and erases keys and the phrase from memory when it is done with them, but it cannot stop the system from swapping its memory to disk. Also read the remark in [ANALYSIS.md](ANALYSIS.md) about cache timing attacks during encryption.
 
 ---
 
@@ -219,7 +221,7 @@ Here's an incomplete list of what you shouldn't do:
 
 ## 10. Error levels
 
-The program can generate thirteen error levels. You can use these in a shell script or in a parent program.
+The program can generate fourteen error levels. You can use these in a shell script or in a parent program.
 
 | Level | Meaning |
 |------:|---------|
@@ -237,6 +239,7 @@ The program can generate thirteen error levels. You can use these in a shell scr
 | 11 | Can't find end of code. |
 | 12 | CRC error, e-mail style only. |
 | 13 | Authentication failed: wrong key, or data damaged or altered. |
+| 14 | System random generator failed. |
 
 ---
 

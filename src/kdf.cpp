@@ -23,6 +23,8 @@ Buf pbkdf2(const std::string &pw, const uint8_t *salt, size_t slen, uint32_t ite
       for (int j = 0; j < 32; j++) t[j] ^= u[j];
     }
     out.insert(out.end(), t, t + 32);
+    wipe(u, sizeof u);
+    wipe(t, sizeof t);
   }
   out.resize(outlen);
   return out;
@@ -86,6 +88,9 @@ void scrypt_romix(uint8_t *blk, size_t r, uint32_t N)
   }
   for (size_t i = 0; i < w; i++)
     for (int j = 0; j < 4; j++) blk[4 * i + j] = (uint8_t)(X[i] >> (8 * j));
+  wipe(X.data(), 4 * w);
+  wipe(T.data(), 4 * w);
+  wipe(V.data(), 4 * V.size());
 }
 
 }  // namespace
@@ -94,5 +99,7 @@ Buf scrypt(const std::string &pw, const uint8_t *salt, size_t slen, uint32_t N, 
 {
   Buf B = pbkdf2(pw, salt, slen, 1, (size_t)128 * r * p);
   for (uint32_t i = 0; i < p; i++) scrypt_romix(&B[(size_t)i * 128 * r], r, N);
-  return pbkdf2(pw, B.data(), B.size(), 1, outlen);
+  Buf out = pbkdf2(pw, B.data(), B.size(), 1, outlen);
+  wipe(B.data(), B.size());
+  return out;
 }

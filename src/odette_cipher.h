@@ -12,6 +12,7 @@
 class OdetteCipher {
 public:
   OdetteCipher(const uint8_t key[NL][8], const uint8_t salt[SALT_LEN]);
+  ~OdetteCipher();
 
   void encrypt_block(uint8_t *b) const;
   void decrypt_block(uint8_t *b) const;

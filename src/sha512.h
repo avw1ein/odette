@@ -15,6 +15,7 @@ struct Sha512 {
 
   void update(const uint8_t *p, size_t n);
   void final(uint8_t out[64]);
+  ~Sha512();
 
 private:
   void block(const uint8_t *p);

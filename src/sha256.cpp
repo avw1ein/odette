@@ -76,6 +76,15 @@ Hmac::Hmac(const uint8_t *key, size_t klen)
   inner.update(pad, 64);
   for (int i = 0; i < 64; i++) pad[i] = k[i] ^ 0x5c;
   outer.update(pad, 64);
+  explicit_bzero(k, sizeof k);
+  explicit_bzero(pad, sizeof pad);
+}
+
+// Hash states carry keyed HMAC pads and KDF intermediates.
+Sha256::~Sha256()
+{
+  explicit_bzero(h, sizeof h);
+  explicit_bzero(buf, sizeof buf);
 }
 
 void Hmac::mac(const uint8_t *msg, size_t n, uint8_t out[32]) const

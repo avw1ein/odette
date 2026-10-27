@@ -1,4 +1,4 @@
-# Odette 5.01: software structure and flow
+# Odette 5.02: software structure and flow
 
 This document describes how the program is built and how data moves through it. For the cryptographic reasoning see [ANALYSIS.md](ANALYSIS.md); for usage see [README.md](README.md).
 
@@ -149,7 +149,7 @@ Free functions by unit:
 
 | Unit | Functions |
 |---|---|
-| common | `readfile`, `writefile`, `randbytes`, `errorexit`; global `errarg` names the file or argument the next error message refers to |
+| common | `readfile`, `writefile`, `randbytes`, `wipe`, `lockdown`, `errorexit`; global `errarg` names the file or argument the next error message refers to |
 | keys | `readkeyfile`, `getphrase(confirm)`, `kdf_ok`, `derive_keys` |
 | container | `seal`, `unseal` |
 | odette_cipher | `pad256`, `unpad256` |
@@ -160,7 +160,7 @@ Free functions by unit:
 
 ### 4.1 Top level
 
-`main` parses exactly four arguments (`act=`, `in=`, `out=`, and `key=` or `phrase`); any other count, a duplicate, an unknown option or a missing argument ends the program with an error code. It then obtains key input, rejects an input that is the same file as the output (by name and by device/inode), reads the input and runs the selected pipeline. Output is written last and only if everything before it succeeded.
+`main` first calls `lockdown`, which sets the core-file limit to zero and clears the dumpable flag, so a crash leaves no core file and other processes of the same user cannot attach a debugger or read the process memory. It then parses exactly four arguments (`act=`, `in=`, `out=`, and `key=` or `phrase`); any other count, a duplicate, an unknown option or a missing argument ends the program with an error code. It then obtains key input, rejects an input that is the same file as the output (by name and by device/inode), reads the input and runs the selected pipeline. Output is written last and only if everything before it succeeded.
 
 ```mermaid
 flowchart TD
@@ -196,6 +196,8 @@ Out-of-memory (`std::bad_alloc`) anywhere between reading and writing is caught 
 
 In words: `seal` draws a random 16-byte salt and a random 256-byte IV, derives the key material (for a phrase through scrypt; for a key file through one HMAC), builds the cipher, pads the plaintext to a multiple of 256 bytes, encrypts in CBC mode, assembles the header, ciphertext and finally appends an HMAC-SHA-512 tag over everything before it (encrypt-then-MAC).
 
+The salt and the IV are drawn inside `seal` and nowhere else; no interface lets a caller supply them, and `seal` exits with error 14 if the random source fails or returns an all-zero value. This is an invariant of the design, not a convenience: the cipher's security argument needs every block to be encrypted by a permutation instance that is never used again, and the fresh salt is what separates the instances of one file from those of every other file (see [ANALYSIS.md](ANALYSIS.md), section 6.1).
+
 ```mermaid
 sequenceDiagram
     participant M as main
@@ -208,6 +210,7 @@ sequenceDiagram
     M->>C: seal(plain, keys, DEFAULT_KDF)
     C->>R: randbytes(salt, 16)
     C->>R: randbytes(iv, 256)
+    Note over C: exit 14 if salt or IV is all zero
     C->>K: derive_keys(keys, salt, kdf)
     K-->>C: KeyMaterial (key, mackey, lenmask)
     C->>O: construct(key, salt)
@@ -267,7 +270,7 @@ flowchart TD
     sc --> k1["first 64 bytes: key"]
     sc --> k2["last 64 bytes: mackey"]
     kf --> k3["key = the 64 bytes"]
-    kf --> hm["mackey = HMAC-SHA-512 keyed with key over label 'Odette 5.01 mac'"]
+    kf --> hm["mackey = HMAC-SHA-512 keyed with key over label 'Odette 5.02 mac'"]
     k1 --> lm["lenmask = XOR over key bytes"]
     k3 --> lm
 ```
@@ -305,7 +308,7 @@ For block *i*: `work = plain[i] XOR previous_ciphertext XOR tweak(i)`, then `enc
 
 ```mermaid
 flowchart LR
-    A["magic<br/>4 bytes<br/>O D 5 1"] --> B["KDF params<br/>4 bytes<br/>logn r p 0"] --> C["salt<br/>16 bytes"] --> D["IV<br/>256 bytes"] --> E["ciphertext<br/>n x 256 bytes"] --> F["HMAC tag<br/>64 bytes"]
+    A["magic<br/>4 bytes<br/>O D 5 2"] --> B["KDF params<br/>4 bytes<br/>logn r p 0"] --> C["salt<br/>16 bytes"] --> D["IV<br/>256 bytes"] --> E["ciphertext<br/>n x 256 bytes"] --> F["HMAC tag<br/>64 bytes"]
 ```
 
 | Part | Size | Notes |
@@ -318,7 +321,7 @@ The smallest possible container is 600 bytes. The KDF parameters are validated b
 
 ### 6.2 E-mail (armored) format
 
-`high2low` appends a `0xFF` end marker, encodes the bytes with a 64-character alphabet (`0-9 : ;`, `A-Z`, `a-z`), inserts a newline at regular intervals, and wraps the result in a `*BEGIN Odette 5.01 message, valid char: N` line (N is the count of encoded characters) and a `*END Odette 5.01 message, CRC: C` line. `low2high` scans for the BEGIN line, decodes exactly N valid characters while ignoring everything else (whitespace, line breaks, quoting damage), finds the END line, checks the CRC-32 and removes the end marker. The CRC only catches transmission damage; authenticity comes from the HMAC checked afterwards in `unseal`.
+`high2low` appends a `0xFF` end marker, encodes the bytes with a 64-character alphabet (`0-9 : ;`, `A-Z`, `a-z`), inserts a newline at regular intervals, and wraps the result in a `*BEGIN Odette 5.02 message, valid char: N` line (N is the count of encoded characters) and a `*END Odette 5.02 message, CRC: C` line. `low2high` scans for the BEGIN line, decodes exactly N valid characters while ignoring everything else (whitespace, line breaks, quoting damage), finds the END line, checks the CRC-32 and removes the end marker. The CRC only catches transmission damage; authenticity comes from the HMAC checked afterwards in `unseal`.
 
 ## 7. Phrase input
 
@@ -350,9 +353,10 @@ All failures end in `errorexit(code)`, which prints a message to stderr and call
 | 3, 4, 9, 10 | `parse_args`, `getphrase` | wrong count, invalid, duplicate or missing argument |
 | 5 | `readkeyfile` | faulty key file |
 | 6 | `main` | input and output are the same file |
-| 7 | `randbytes`, scrypt, `main` | out of memory or no random source |
+| 7 | scrypt, `main` | out of memory |
 | 8, 11, 12 | `low2high` | no BEGIN line, no END line or short body, CRC mismatch |
 | 13 | `unseal` | authentication failed, bad header, wrong key or altered data |
+| 14 | `randbytes`, `seal` | system random generator failed or returned an all-zero salt or IV |
 
 ## 9. Build and test structure
 
@@ -371,12 +375,14 @@ flowchart LR
     shtest --> make
 ```
 
-- `test_primitives` checks SHA-256, SHA-512, HMAC (RFC 4231), PBKDF2 and scrypt (RFC 7914) against published vectors, and checks cipher properties (equal blocks give unrelated ciphertext, every key bit matters, salt and block index change the tweak).
-- `test.sh` runs the real binary: round trips in all four modes for several sizes, phrase mode, wrong-key and corrupted-input failures, truncation and block-edit detection, and container size.
+- `test_primitives` checks SHA-256, SHA-512, HMAC (RFC 4231), PBKDF2 and scrypt (RFC 7914) against published vectors, and checks cipher properties: equal blocks give unrelated ciphertext, every key bit matters, salt and block index change the tweak, one changed input bit or word changes every output word in both directions, eight identical DES keys still give distinct layers, and two `seal` calls on the same input share neither salt, IV nor ciphertext.
+- `test.sh` runs the real binary: round trips in all four modes for several sizes, phrase mode, wrong-key and corrupted-input failures, truncation and block-edit detection, rejection of files of another version, fresh salt per encryption, and container size.
 
 ## 10. Design notes for maintainers
 
 - **Order of operations is security-relevant.** Encrypt-then-MAC, with the MAC verified before any decryption or unpadding. Header fields are untrusted until the tag is verified, so they are bounded by `kdf_ok`.
-- **File format.** The on-disk format is defined by `HDR_LEN`, `MAGIC` and the label strings `"Odette 5.01 white"`, `"... tweak"` and `"... mac"`; changing any of them breaks existing files.
+- **File format.** The on-disk format is defined by `HDR_LEN`, `MAGIC` and the label strings `"Odette 5.02 white"`, `"... tweak"` and `"... mac"`; changing any of them breaks existing files.
+- **Randomisation is mandatory.** Salt and IV are drawn in `seal` only. Do not add a deterministic mode or a caller-supplied salt or IV; see section 4.2 and [ANALYSIS.md](ANALYSIS.md), section 10.
 - **Memory model.** Whole files are held in memory, and sealing keeps several copies (padded input, ciphertext, output). scrypt allocates 128 MiB in phrase mode.
 - **No global state** other than `errarg` and the immutable DES lookup tables built at startup.
+- **Secrets are wiped.** `KeyInput`, `KeyMaterial`, `Des`, `OdetteCipher`, `Sha256` and `Sha512` zeroise their key material, schedules, whitening and HMAC pad states in their destructors with `explicit_bzero`; the key-file parser, the phrase confirmation copy and the scrypt and PBKDF2 intermediates (including the 128 MiB table) are wiped before they go out of scope. Plaintext and ciphertext buffers are not wiped: they are the user's own data and live in ordinary `Buf` objects. Keep new code holding key material inside one of these types, or wipe it explicitly.

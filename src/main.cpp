@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 1993-1994, 2026 Andy van Wezel
 //
-// Odette 5.01 - Linux command line port of the DOS program by Andy van Wezel (1993 - 1994),
+// Odette 5.02 - Linux command line port of the DOS program by Andy van Wezel (1993 - 1994),
 // ported and updated 2026.
 //
 // Build: make
@@ -30,7 +30,7 @@ struct Args {
 
 void usage()
 {
-  puts("Odette 5.01 Copyright (C) by Andy van Wezel 1993 - 1994, 2026\n");
+  puts("Odette 5.02 Copyright (C) by Andy van Wezel 1993 - 1994, 2026\n");
   puts("Usage: odette act=e|d|em|dm in=infile out=outfile phrase|key=keyfile");
   puts(" e            Encryption.");
   puts(" d            Decryption.");
@@ -101,6 +101,7 @@ Args parse_args(int argc, char *argv[])
 
 int main(int argc, char *argv[])
 {
+  lockdown();
   if (argc == 1) { usage(); return 3; }
   Args args = parse_args(argc, argv);
 

@@ -15,6 +15,7 @@ struct Sha256 {
 
   void update(const uint8_t *p, size_t n);
   void final(uint8_t out[32]);
+  ~Sha256();
 
 private:
   void block(const uint8_t *p);

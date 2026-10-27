@@ -157,6 +157,11 @@ void round_(int num, uint32_t *block, const uint8_t (*kn)[8])
 
 }  // namespace
 
+Des::~Des()
+{
+  explicit_bzero(kn_, sizeof kn_);
+}
+
 void Des::setkey(const uint8_t key[8])
 {
   uint8_t pc1m[56], pcr[56];

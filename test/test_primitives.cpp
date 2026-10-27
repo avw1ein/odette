@@ -6,6 +6,7 @@
 #include <cstring>
 
 #include "common.h"
+#include "container.h"
 #include "kdf.h"
 #include "odette_cipher.h"
 #include "sha256.h"
@@ -26,6 +27,38 @@ static int diffbytes(const uint8_t *a, const uint8_t *b)
   int n = 0;
   for (int i = 0; i < 256; i++) n += a[i] != b[i];
   return n;
+}
+
+static int diffbits(const uint8_t *a, const uint8_t *b, int n)
+{
+  int c = 0;
+  for (int i = 0; i < n; i++) c += __builtin_popcount(a[i] ^ b[i]);
+  return c;
+}
+
+static int activewords(const uint8_t *a, const uint8_t *b)
+{
+  int n = 0;
+  for (int w = 0; w < 32; w++) n += memcmp(a + 8 * w, b + 8 * w, 8) != 0;
+  return n;
+}
+
+// Flips one bit or one random word of the input and demands that every output word changes and
+// that the number of flipped output bits is near 1024. Covers the forward and backward cones.
+static void avalanche(const OdetteCipher &c, bool enc, const char *name)
+{
+  for (int t = 0; t < 64; t++) {
+    uint8_t x[256], y[256];
+    randbytes(x, 256);
+    memcpy(y, x, 256);
+    if (t & 1) randbytes(y + 8 * (t % 32), 8);          // a difference confined to one word
+    else y[t % 256] ^= (uint8_t)(1 << (t / 8 % 8));      // a single bit
+    if (!memcmp(x, y, 256)) continue;
+    enc ? c.encrypt_block(x) : c.decrypt_block(x);
+    enc ? c.encrypt_block(y) : c.decrypt_block(y);
+    int words = activewords(x, y), bits = diffbits(x, y, 256);
+    if (words != 32 || bits < 896 || bits > 1152) { printf("FAIL: %s avalanche: %d words, %d bits\n", name, words, bits); fails++; return; }
+  }
 }
 
 static void check(const char *name, const std::string &got, const char *want)
@@ -162,7 +195,44 @@ int main()
     if (diffbytes(t0, t1) < 200) { puts("FAIL: tweak values related"); fails++; }
   }
 
+  // Diffusion in both directions: one changed input bit or word changes every output word.
+  avalanche(cipher, true, "encrypt");
+  avalanche(cipher, false, "decrypt");
+
+  // Eight identical DES keys must still give eight distinct layers: the whitening carries the
+  // layer index, so the cipher has no slid structure and no involution even for this key file.
+  {
+    uint8_t same[NL][8];
+    for (int i = 0; i < NL; i++) memcpy(same[i], key[0], 8);
+    OdetteCipher weak(same, salt);
+    avalanche(weak, true, "identical-keys encrypt");
+    uint8_t x[256], y[256];
+    randbytes(x, 256);
+    memcpy(y, x, 256);
+    weak.encrypt_block(y);
+    if (diffbytes(x, y) < 200) { puts("FAIL: identical keys: output related to input"); fails++; }
+    weak.encrypt_block(y);
+    if (diffbytes(x, y) < 200) { puts("FAIL: identical keys: encrypt twice is the identity"); fails++; }
+  }
+
+  // The container must draw a fresh salt and IV every time: equal input never yields a shared
+  // permutation instance, which is what keeps every block a single-use pair of its cipher.
+  {
+    KeyInput ki;
+    memcpy(ki.key, key, sizeof ki.key);
+    Buf msg(300);
+    randbytes(msg.data(), msg.size());
+    Buf f1 = seal(msg, ki, DEFAULT_KDF), f2 = seal(msg, ki, DEFAULT_KDF);
+    size_t want = HDR_LEN + 256 * (msg.size() / 256 + 1) + TAG_LEN;
+    if (f1.size() != want || memcmp(f1.data(), MAGIC, 4) != 0 || f1[7] != 0) { puts("FAIL: container format"); fails++; }
+    if (!memcmp(&f1[8], &f2[8], SALT_LEN)) { puts("FAIL: salt repeated"); fails++; }
+    if (diffbytes(&f1[8 + SALT_LEN], &f2[8 + SALT_LEN]) < 200) { puts("FAIL: IV repeated"); fails++; }
+    if (diffbytes(&f1[HDR_LEN], &f2[HDR_LEN]) < 200) { puts("FAIL: first blocks related across encryptions"); fails++; }
+    if (unseal(f1, ki) != msg || unseal(f2, ki) != msg) { puts("FAIL: seal/unseal round trip"); fails++; }
+  }
+
   if (fails) return 1;
-  puts("ok: SHA-256/512, HMAC, PBKDF2, scrypt known answers; cipher round trips; whitening, salt, tweak and key-bit dependence");
+  puts("ok: SHA-256/512, HMAC, PBKDF2, scrypt known answers; cipher round trips; whitening, salt, tweak and key-bit dependence; "
+       "avalanche both ways; identical keys give distinct layers; fresh salt and IV per container");
   return 0;
 }

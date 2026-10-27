@@ -10,6 +10,8 @@ struct KeyInput {
   bool usephrase = false;
   std::string phrase;
   uint8_t key[NL][8] = {};  // only meaningful when !usephrase
+
+  ~KeyInput();
 };
 
 // Everything the cipher and the container need once the salt is known.
@@ -17,6 +19,8 @@ struct KeyMaterial {
   uint8_t key[NL][8];
   uint8_t mackey[64];
   uint8_t lenmask;  // masks the length byte in the padding
+
+  ~KeyMaterial();
 };
 
 void readkeyfile(const std::string &name, uint8_t key[NL][8]);

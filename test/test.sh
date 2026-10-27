@@ -91,6 +91,17 @@ printf '\x1e' | dd of="$T/t4" bs=1 seek=4 conv=notrunc 2>/dev/null
 fail13 ./odette act=d in="$T/t4" out="$T/x" key=sample.key
 echo "ok: bit flip, truncation, header change and oversized KDF parameters fail"
 
+cp "$T/rep.enc" "$T/t5"
+printf '\x01' | dd of="$T/t5" bs=1 seek=3 conv=notrunc 2>/dev/null
+fail13 ./odette act=d in="$T/t5" out="$T/x" key=sample.key
+sed 's/Odette 5\.02/Odette 5.00/' "$T/p.txt" > "$T/old.txt"
+rc=0; ./odette act=dm in="$T/old.txt" out="$T/x" key=sample.key 2>/dev/null || rc=$?
+[ "$rc" -eq 8 ] || { echo "FAIL: e-mail tags of another version accepted"; exit 1; }
+echo "ok: files of another version are rejected"
+
+[ "$(cmp -l <(head -c 24 "$T/rep.enc" | tail -c 16) <(head -c 24 "$T/rep2.enc" | tail -c 16) | wc -l)" -gt 8 ] || { echo "FAIL: salt repeated"; exit 1; }
+echo "ok: fresh salt for every encryption"
+
 W="A completely different phrase that is long enough to be accepted."
 rc=0; echo "$W" | ./odette act=dm in="$T/p.txt" out="$T/x" phrase 2>/dev/null || rc=$?
 [ "$rc" -eq 13 ] || { echo "FAIL: wrong phrase accepted"; exit 1; }

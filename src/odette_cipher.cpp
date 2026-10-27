@@ -27,8 +27,8 @@ void swap_groups(uint8_t *blk, size_t bs)
   for (size_t off = 0; off < 256; off += bs) swap_nibbles(blk + off, bs);
 }
 
-const char WHITE_LABEL[] = "Odette 5.01 white";
-const char TWEAK_LABEL[] = "Odette 5.01 tweak";
+const char WHITE_LABEL[] = "Odette 5.02 white";
+const char TWEAK_LABEL[] = "Odette 5.02 tweak";
 
 }  // namespace
 
@@ -45,6 +45,11 @@ OdetteCipher::OdetteCipher(const uint8_t key[NL][8], const uint8_t salt[SALT_LEN
       tweakmac_.mac(msg.data(), msg.size(), &white_[j][64 * c]);
     }
   memcpy(salt_, salt, SALT_LEN);
+}
+
+OdetteCipher::~OdetteCipher()
+{
+  wipe(white_, sizeof white_);
 }
 
 void OdetteCipher::tweak(uint64_t index, uint8_t out[256]) const

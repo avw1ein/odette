@@ -90,6 +90,15 @@ Hmac512::Hmac512(const uint8_t *key, size_t klen)
   inner.update(pad, 128);
   for (int i = 0; i < 128; i++) pad[i] = k[i] ^ 0x5c;
   outer.update(pad, 128);
+  explicit_bzero(k, sizeof k);
+  explicit_bzero(pad, sizeof pad);
+}
+
+// Hash states carry keyed HMAC pads and whitening or tweak material.
+Sha512::~Sha512()
+{
+  explicit_bzero(h, sizeof h);
+  explicit_bzero(buf, sizeof buf);
 }
 
 void Hmac512::mac(const uint8_t *msg, size_t n, uint8_t out[64]) const

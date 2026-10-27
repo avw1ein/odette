@@ -3,10 +3,14 @@
 
 #include "common.h"
 
+#include <cerrno>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fcntl.h>
+#include <sys/prctl.h>
 #include <sys/random.h>
+#include <sys/resource.h>
 #include <unistd.h>
 
 std::string errarg;
@@ -27,7 +31,8 @@ std::string errarg;
     case 10: fprintf(stderr, "ERROR#10: Argument missing: %s\nType odette for help.\n", a); break;
     case 11: fprintf(stderr, "ERROR#11: Can't find end of code in: %s\n", a); break;
     case 12: fprintf(stderr, "ERROR#12: CRC error in: %s\n", a); break;
-    case 13: fputs("ERROR#13: Authentication failed (wrong key, or data damaged or not Odette 5.01).\n", stderr); break;
+    case 13: fputs("ERROR#13: Authentication failed (wrong key, or data damaged or not Odette 5.02).\n", stderr); break;
+    case 14: fputs("ERROR#14: System random generator failed.\n", stderr); break;
     default: break;
   }
   exit(numer);
@@ -61,5 +66,25 @@ void writefile(const std::string &name, const Buf &data)
 
 void randbytes(uint8_t *p, size_t n)
 {
-  if (getrandom(p, n, 0) != (ssize_t)n) errorexit(7);
+  while (n > 0) {
+    ssize_t k = getrandom(p, n, 0);
+    if (k < 0) {
+      if (errno == EINTR) continue;
+      errorexit(14);
+    }
+    p += k;
+    n -= (size_t)k;
+  }
+}
+
+void wipe(void *p, size_t n)
+{
+  explicit_bzero(p, n);
+}
+
+void lockdown()
+{
+  const rlimit nocore = { 0, 0 };
+  setrlimit(RLIMIT_CORE, &nocore);
+  prctl(PR_SET_DUMPABLE, 0, 0, 0, 0);
 }

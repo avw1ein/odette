@@ -8,11 +8,25 @@
 #include "odette_cipher.h"
 #include "sha512.h"
 
+namespace {
+
+bool all_zero(const uint8_t *p, size_t n)
+{
+  uint8_t acc = 0;
+  for (size_t i = 0; i < n; i++) acc |= p[i];
+  return acc == 0;
+}
+
+}  // namespace
+
+// Salt and IV are always drawn here; no caller can supply them. A fixed salt or IV would let two
+// files share a permutation instance, which is the one thing the analysis requires never happens.
 Buf seal(const Buf &plain, const KeyInput &keys, const KdfParams &kdf)
 {
   uint8_t iv[IV_LEN], salt[SALT_LEN];
   randbytes(salt, SALT_LEN);
   randbytes(iv, IV_LEN);
+  if (all_zero(salt, SALT_LEN) || all_zero(iv, IV_LEN)) errorexit(14);
   KeyMaterial km = derive_keys(keys, salt, kdf);
   OdetteCipher cipher(km.key, salt);
 
