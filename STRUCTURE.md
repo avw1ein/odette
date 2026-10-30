@@ -1,6 +1,6 @@
 # Odette 5.02: software structure and flow
 
-This document describes how the program is built and how data moves through it. For the cryptographic reasoning see [ANALYSIS.md](ANALYSIS.md); for usage see [README.md](README.md).
+This document describes how the program is built and how data moves through it. For the cryptographic reasoning see [ANALYSIS.md](ANALYSIS.md); for usage see [README.md](README.md); for diagrams of one block passing through the cipher see [VISUALIZATION.md](VISUALIZATION.md).
 
 ## 1. Overview
 

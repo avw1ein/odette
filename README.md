@@ -21,6 +21,8 @@ Released under the MIT License (see [LICENSE](LICENSE)).
 10. [Error levels](#10-error-levels)
 11. [Disclaimer](#11-disclaimer)
 
+See also [VISUALIZATION.md](VISUALIZATION.md) for diagrams of one block going through the cipher, [ANALYSIS.md](ANALYSIS.md) for the security reasoning and [STRUCTURE.md](STRUCTURE.md) for the code layout.
+
 ---
 
 ## Introduction
@@ -45,15 +47,15 @@ Features:
 
 ## History
 
-The first experiments with block expansion, the novelty in this project, were done in the early nineties. Back then the USA lifted the export embargo on DES. Note that this project started before AES. If you're interested, have a look at the first AES stage. Big Blue, IBM, placed an example implementation of DES into the public domain. I found it on Fidonet. My first program was called Lowkeyed. Lowkeyed used a home-brew DES3 variant based on block expansion. To transport cipher text in e-mails, I added a translation to low-ASCII. Hence, low-keyed. This translation was common in those days, since e-mail attachments only came later. Then came the General Privacy Guard, GPG. GPG used 6 layers of DES. I kept developing the project inside my head, but didn't make updates for a long time. GPG is nowadays a synonym for GnuPG and not General Privacy Guard. So here comes Odette! Odette is an ode to Tchaikovsky's Swan Lake.
+The first experiments with block expansion, the idea this project is built around, date from the early nineties, when the USA lifted the export embargo on DES and AES did not exist yet. I worked it out on my own at the time; related ideas have been explored by others before and since, and I make no claim to priority. Big Blue, IBM, placed an example implementation of DES into the public domain. I found it on Fidonet. My first program was called Lowkeyed. Lowkeyed used a home-brew DES3 variant based on block expansion. To transport cipher text in e-mails, I added a translation to low-ASCII. Hence, low-keyed. This translation was common in those days, since e-mail attachments only came later. Then came the General Privacy Guard, GPG. GPG used 6 layers of DES. I kept developing the project inside my head, but didn't make updates for a long time. GPG is nowadays a synonym for GnuPG and not General Privacy Guard. So here comes Odette! Odette is an ode to Tchaikovsky's Swan Lake.
 
 ---
 
 ## Ethics
 
-Technology doesn't discriminate against its usage and users. I've learned to exaggerate to make a point. Here we go: at the end of WWII people were convinced they needed the A-bomb (first). Ever since, governments and their institutes have worked round the clock to prevent bad actors from pushing the button. The world has already had some near escapes.
+Technology does not choose its users. Strong encryption protects people, and it can also shield people who do harm. That tension is why this section exists.
 
-Currently, Odette is in the ballpark of AES-256, if not 512. Its predecessors already had that potential. For a long time this gave me a bad gut feeling. Today, however, with quantum computers around the corner and also a stronger link between human rights and encryption, I no longer feel uneasy about continuing.
+If the estimates in [ANALYSIS.md](ANALYSIS.md) hold, the key length puts Odette in the same range as AES-256; they are estimates from the author, not a review. Strength was the goal from the first version on, and for a long time I was not comfortable publishing a tool like this as a private person. With quantum computers on the horizon and encryption increasingly seen as a matter of human rights, I came to see it differently and decided to finish it and put it out.
 
 ---
 
@@ -93,13 +95,13 @@ Files made by Odette 5.02 cannot be read by older versions, and the other way ar
 
 ## 2. Why use Odette?
 
-At this moment a single DES encryption can be cracked in a few hours (minutes?). You need a good computer to do it, but... The next step in line is triple DES (DES3). This is also within reach of modern computers. That's why some of us need something stronger. Odette is just that. In return you have to be more patient, because it is slower. This slow speed actually makes brute-force attacks more difficult, compared to more modern, more optimized algorithms. Nowadays almost every CPU, for example, has AES acceleration. This accelerates brute-force attacks on AES.
+At this moment a single DES encryption can be cracked in a few hours (minutes?). You need a good computer to do it, but... The next step in line is triple DES (DES3). This is also within reach of modern computers. That's why some of us want something stronger than DES or triple DES, and Odette is one way to build it out of DES. In return you have to be more patient, because it is slower. The slowness is part of the design: an attacker who tries keys pays for every one of them. Modern CPUs accelerate AES for user and attacker alike; nothing accelerates Odette.
 
 The eight keys feed eight DES layers and a 2048-bit whitening that is derived from every bit of every key. Without the whitening, a meet-in-the-middle attack on a cascade of eight ciphers would need about 2^224 operations. The whitening keeps both halves of such an attack from being tried alone, so the best known approach is to try all 2^512 key values. This is an estimate, not a proof, and the construction has not been reviewed by others. A phrase is only as strong as its entropy: ordinary text carries about 1 to 1.5 bits per character, so use a long phrase or a key file with random keys.
 
 Don't think single DES is bad just because it can be cracked. In the end every code can be cracked; it's just a matter of resources. DES has been studied for almost 50 years. Its security properties, including the shortcomings, are well known. This is the reason why DES can be used as a building block for something stronger. Instead of beginning from scratch, Odette can rely on all that is known about DES.
 
-Is Odette an invention? It's more a matter of creativity. It mostly uses well-known techniques to reach its goal. You should see it as an interface to DES. The creativity is in the block expansion technique that makes multiple DES iterations worthwhile. The block cipher is scaled up and slowed down. Both are great properties for security.
+Is Odette an invention? It's more a matter of creativity. It mostly uses well-known techniques to reach its goal. You should see it as an interface to DES. The creativity is in the block expansion technique that makes multiple DES iterations worthwhile. The result is a block cipher that is wider and slower than DES. Both work in the defender's favour, at the price of speed.
 
 ---
 
@@ -160,7 +162,7 @@ Step 16: Whitening 8, DES encryption with key8, then a final
          whitening 9.
 ```
 
-Each whitening is 2048 bits and is made from all eight keys and the salt with HMAC-SHA-512, so every bit of every key matters, including the bits that DES itself ignores, and two files made with the same key file share no whitening. The tweak of step 0 is made the same way from the keys, the salt and the block number.
+Each whitening is 2048 bits and is made from all eight keys and the salt with HMAC-SHA-512, so every bit of every key matters, including the bits that DES itself ignores, and two files made with the same key file share no whitening. The tweak of step 0 is made the same way from the keys, the salt and the block number. [VISUALIZATION.md](VISUALIZATION.md) draws these sixteen steps byte by byte.
 
 The output consists of: a 4-byte header (O, D, 5, 2), the phrase hashing parameters (4 bytes), the salt (16 bytes), the IV (256 bytes), the encrypted blocks, and a 64-byte HMAC-SHA-512 tag over all of it. The MAC key is 512 bits, taken from the same keys or phrase as the DES keys. Decryption checks the tag first and stops with error 13 if it does not match.
 
